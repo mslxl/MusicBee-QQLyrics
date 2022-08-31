@@ -27,9 +27,9 @@ namespace MusicBeePlugin
 
     public partial class Plugin
     {
-        private const string ProviderName = "Netease Cloud Music(网易云音乐)";
-        private const string ConfigFilename = "netease_config";
-        private const string NoTranslateFilename = "netease_notranslate";
+        private const string ProviderName = "QQ Music(QQ音乐)";
+        private const string ConfigFilename = "qq_config";
+        private const string NoTranslateFilename = "qq_notranslate";
         private NeteaseConfig _config = new NeteaseConfig();
         private ComboBox _formatComboBox = null;
         private CheckBox _fuzzyCheckBox = null;
@@ -45,9 +45,9 @@ namespace MusicBeePlugin
             _mbApiInterface = new MusicBeeApiInterface();
             _mbApiInterface.Initialise(apiInterfacePtr);
             _about.PluginInfoVersion = PluginInfoVersion;
-            _about.Name = "Netease Lyrics";
-            _about.Description = "A plugin to retrieve lyrics from Netease Cloud Music.(从网易云音乐获取歌词的插件。)";
-            _about.Author = "Charlie Jiang";
+            _about.Name = "QQ Lyrics";
+            _about.Description = "A plugin to retrieve lyrics from QQ Music.(从 QQ 音乐获取歌词的插件。)";
+            _about.Author = "Mslxl, Charlie Jiang";
             _about.TargetApplication = "";   // current only applies to artwork, lyrics or instant messenger name that appears in the provider drop down selector or target Instant Messenger
             _about.Type = PluginType.LyricsRetrieval;
             _about.VersionMajor = short.Parse(versions[0]);  // your plugin version
@@ -68,7 +68,7 @@ namespace MusicBeePlugin
                 }
                 catch (Exception ex)
                 {
-                    _mbApiInterface.MB_Trace("[NeteaseMusic] Failed to load config" + ex);
+                    _mbApiInterface.MB_Trace("[QQMusic] Failed to load config" + ex);
                 }
             }
             if (File.Exists(noTranslatePath))
