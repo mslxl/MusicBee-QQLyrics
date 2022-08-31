@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Drawing;
 using System.Windows.Forms;
@@ -9,6 +10,7 @@ using System.Reflection;
 using System.Text;
 using Newtonsoft.Json;
 using System.Text.RegularExpressions;
+using Newtonsoft.Json.Linq;
 
 namespace MusicBeePlugin
 {
@@ -48,17 +50,20 @@ namespace MusicBeePlugin
             _about.Name = "QQ Lyrics";
             _about.Description = "A plugin to retrieve lyrics from QQ Music.(从 QQ 音乐获取歌词的插件。)";
             _about.Author = "Mslxl, Charlie Jiang";
-            _about.TargetApplication = "";   // current only applies to artwork, lyrics or instant messenger name that appears in the provider drop down selector or target Instant Messenger
+            _about.TargetApplication =
+                ""; // current only applies to artwork, lyrics or instant messenger name that appears in the provider drop down selector or target Instant Messenger
             _about.Type = PluginType.LyricsRetrieval;
-            _about.VersionMajor = short.Parse(versions[0]);  // your plugin version
+            _about.VersionMajor = short.Parse(versions[0]); // your plugin version
             _about.VersionMinor = short.Parse(versions[1]);
             _about.Revision = short.Parse(versions[2]);
             _about.MinInterfaceVersion = MinInterfaceVersion;
             _about.MinApiRevision = MinApiRevision;
             _about.ReceiveNotifications = ReceiveNotificationFlags.DownloadEvents;
-            _about.ConfigurationPanelHeight = 90;   // height in pixels that musicbee should reserve in a panel for config settings. When set, a handle to an empty panel will be passed to the Configure function
+            _about.ConfigurationPanelHeight =
+                90; // height in pixels that musicbee should reserve in a panel for config settings. When set, a handle to an empty panel will be passed to the Configure function
 
-            string noTranslatePath = Path.Combine(_mbApiInterface.Setting_GetPersistentStoragePath(), NoTranslateFilename);
+            string noTranslatePath =
+                Path.Combine(_mbApiInterface.Setting_GetPersistentStoragePath(), NoTranslateFilename);
             string configPath = Path.Combine(_mbApiInterface.Setting_GetPersistentStoragePath(), ConfigFilename);
             if (File.Exists(configPath))
             {
@@ -71,6 +76,7 @@ namespace MusicBeePlugin
                     _mbApiInterface.MB_Trace("[QQMusic] Failed to load config" + ex);
                 }
             }
+
             if (File.Exists(noTranslatePath))
             {
                 File.Delete(noTranslatePath);
@@ -149,40 +155,39 @@ namespace MusicBeePlugin
         }
 
         // ReSharper disable once UnusedMember.Global
-        public string RetrieveLyrics(string sourceFileUrl, string artist, string trackTitle, string album,
+        public string? RetrieveLyrics(string sourceFileUrl, string artist, string trackTitle, string album,
             bool synchronisedPreferred, string provider)
         {
             if (provider != ProviderName) return null;
-
-            var id = 0L;
+            string? mid = null;
             var specifiedId = _mbApiInterface.Library_GetFileTag(sourceFileUrl, MetaDataType.Custom10)
                               ?? _mbApiInterface.NowPlaying_GetFileTag(MetaDataType.Custom10);
 
-            id = TryParseNeteaseURL(specifiedId);
+            mid = TryParseQQURL(specifiedId);
 
-            if (id == 0)
+            if (mid == null)
             {
                 var searchResult = QueryWithFeatRemoved(trackTitle, artist);
                 if (searchResult == null) return null;
-                id = searchResult.id;
+                mid = searchResult.mid;
             }
-
-            if (id == 0)
+            
+            if (mid == null)
                 return null;
 
-            var lyricResult = RequestLyric(id);
+            var lyricResult = RequestLyric(mid);
 
-            if (lyricResult.lrc?.lyric == null) return null;
-            if (lyricResult.tlyric?.lyric == null || _config.format == NeteaseConfig.OutputFormat.Original)
-                return lyricResult.lrc.lyric; // No need to process translation
+            if (lyricResult?.lyric == null) return null;
+            if (lyricResult.trans == null || _config.format == NeteaseConfig.OutputFormat.Original)
+                return lyricResult.lyric; // No need to process translation
 
             if (_config.format == NeteaseConfig.OutputFormat.Translation)
-                return lyricResult.tlyric?.lyric ?? lyricResult.lrc.lyric;
+                return lyricResult.trans ?? lyricResult.lyric;
             // translation
-            return LyricProcessor.InjectTranslation(lyricResult.lrc.lyric, lyricResult.tlyric.lyric);
+            return LyricProcessor.InjectTranslation(lyricResult.lyric, lyricResult.trans);
         }
 
-        private SearchResultSong QueryWithFeatRemoved(string trackTitle, string artist)
+        private SearchResultSong? QueryWithFeatRemoved(string trackTitle, string artist)
         {
             var ret = Query(trackTitle, artist);
             if (ret != null) return ret;
@@ -191,24 +196,25 @@ namespace MusicBeePlugin
             return ret;
         }
 
-        private SearchResultSong Query(string trackTitle, string artist)
+        private SearchResultSong? Query(string trackTitle, string artist)
         {
-            var ret = Query(trackTitle + " " + artist)?.result?.songs?.Where(rst =>
+            var ret = Query(trackTitle + " " + artist)?.result?.Where(rst =>
                 _config.fuzzy || string.Equals(GetFirstSeq(RemoveLeadingNumber(rst.name)), GetFirstSeq(trackTitle),
                     StringComparison.OrdinalIgnoreCase)).ToList();
+
             if (ret != null && ret.Count > 0) return ret[0];
 
-            ret = Query(trackTitle)?.result?.songs?.Where(rst =>
+            ret = Query(trackTitle)?.result?.Where(rst =>
                 _config.fuzzy || string.Equals(GetFirstSeq(RemoveLeadingNumber(rst.name)), GetFirstSeq(trackTitle),
                     StringComparison.OrdinalIgnoreCase)).ToList();
             return ret != null && ret.Count > 0 ? ret[0] : null;
         }
 
-        private static SearchResult Query(string s)
+        private static SearchResult? Query(string s)
         {
             using (var client = new WebClient())
             {
-                client.Headers.Add(HttpRequestHeader.Referer, "http://music.163.com/");
+                client.Headers.Add(HttpRequestHeader.Referer, "https://c.y.qq.com/");
                 //client.Headers.Add(HttpRequestHeader.Cookie, "appver=1.5.0.75771;");
 
                 //var searchPost = new NameValueCollection
@@ -219,26 +225,48 @@ namespace MusicBeePlugin
                 //    ["type"] = "1"
                 //};
                 var nameEncoded = Uri.EscapeUriString(s);
-                var searchResult = JsonConvert.DeserializeObject<SearchResult>(
-                    Encoding.UTF8.GetString(
-                        client.DownloadData(
-                            $"http://music.163.com/api/search/get/?csrf_token=hlpretag=&hlposttag=&s={nameEncoded}&type=1&offset=0&total=true&limit=6")
-                    )
-                );
-                //var searchResult = JsonConvert.DeserializeObject<SearchResult>(Encoding.UTF8.GetString(client.UploadValues("http://music.163.com/api/search/pc", searchPost)));
-                if (searchResult.code != 200) return null;
-                return searchResult.result.songCount <= 0 ? null : searchResult;
+                JObject retObj = JObject.Parse(Encoding.UTF8.GetString(
+                    client.DownloadData(
+                        $"https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?format=json&inCharset=utf-8&outCharset=utf-8&platform=yqq.json&key={nameEncoded}")
+                ));
+                var retCode = retObj["code"].Value<int>();
+                if (retCode != 0) return null;
+                var searchResult = new SearchResult
+                {
+                    code = retCode,
+                    result = (from item in retObj["data"]["song"]["itemlist"].Children()
+                            select new SearchResultSong()
+                                { name = item["name"].Value<string>(), mid = item["mid"].Value<string>() }
+                        ).ToArray()
+                };
+
+
+                return searchResult.result.Length <= 0 ? null : searchResult;
             }
         }
 
-        private static LyricResult RequestLyric(long id)
+        private static LyricResult? RequestLyric(string mid)
         {
             using (var client = new WebClient())
             {
-                client.Headers.Add(HttpRequestHeader.Referer, "http://music.163.com/");
-                client.Headers.Add(HttpRequestHeader.Cookie, "appver=1.5.0.75771;");
-                var lyricResult = JsonConvert.DeserializeObject<LyricResult>(Encoding.UTF8.GetString(client.DownloadData("http://music.163.com/api/song/lyric?os=pc&id=" + id + "&lv=-1&kv=-1&tv=-1")));
-                return lyricResult.code != 200 ? null : lyricResult;
+                client.Headers.Add(HttpRequestHeader.UserAgent, "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:104.0) Gecko/20100101 Firefox/104.0");
+                client.Headers.Add(HttpRequestHeader.Accept, "application/json");
+                client.Headers.Add(HttpRequestHeader.Referer, "https://y.qq.com/");
+                client.Encoding = Encoding.UTF8;
+                // client.Headers.Add(HttpRequestHeader.Cookie, "appver=1.5.0.75771;");
+                var response = Encoding.UTF8.GetString(client.DownloadData(
+                    $"https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?format=json&inCharset=utf-8&outCharset=utf-8&notice=0&platform=yqq.json&needNewCode=1&uin=0&loginUin=0&songmid={mid}"));
+                var lyricResult = JsonConvert.DeserializeObject<LyricResult>(response);
+                if (lyricResult.code == 0)
+                {
+                    lyricResult.lyric = Encoding.UTF8.GetString(Convert.FromBase64String(lyricResult.lyric));
+                    if (!string.IsNullOrEmpty(lyricResult.trans))
+                    {
+                        lyricResult.trans = Encoding.UTF8.GetString(Convert.FromBase64String(lyricResult.trans!));
+                    }
+                    return lyricResult;
+                }
+                return null;
             }
         }
 
@@ -259,39 +287,42 @@ namespace MusicBeePlugin
             return Regex.Replace(name, "^\\d+\\.?\\s*", "", RegexOptions.IgnoreCase);
         }
 
-        private static long TryParseNeteaseURL(string input)
+        // ReSharper disable once InconsistentNaming
+        // ReSharper disable once IdentifierTypo
+        private static string? TryParseQQURL(string? input)
         {
             if (input == null)
-                return 0;
-            if (input.StartsWith("netease="))
+                return null;
+            if (input.StartsWith("qq="))
             {
-                input = input.Substring("netease=".Length);
-                long.TryParse(input, out var id);
-                return id;
+                input = input.Substring("qq=".Length);
+                return input;
             }
 
-            if (input.Contains("music.163.com"))
-            {
-                var matches = Regex.Matches(input, "id=(\\d+)");
-                if (matches.Count <= 0)
-                    return 0;
+            // TODO: 等我下个 QQ 音乐看看是不是原来有 Tag 信息 :(
+            // if (input.Contains("music.163.com"))
+            // {
+            //     var matches = Regex.Matches(input, "id=(\\d+)");
+            //     if (matches.Count <= 0)
+            //         return 0;
+            //
+            //     var groups = matches[0].Groups;
+            //     if (groups.Count <= 1)
+            //         return 0;
+            //
+            //     var idString = groups[1].Captures[0].Value;
+            //     long.TryParse(idString, out var id);
+            //     return id;
+            // }
 
-                var groups = matches[0].Groups;
-                if (groups.Count <= 1)
-                    return 0;
-
-                var idString = groups[1].Captures[0].Value;
-                long.TryParse(idString, out var id);
-                return id;
-            }
-
-            return 0;
+            return null;
         }
 
         public string[] GetProviders()
         {
-            return new []{ProviderName};
+            return new[] { ProviderName };
         }
+
         public void ReceiveNotification(string sourceFileUrl, NotificationType type)
         {
         }
