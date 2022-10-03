@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("NeteaseLyrics")]
-[assembly: AssemblyDescription("A plugin to retrieve lyrics from Netease Cloud Music.")]
+[assembly: AssemblyTitle("QQLyrics")]
+[assembly: AssemblyDescription("A plugin to retrieve lyrics from QQ Music.")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("NeteaseLyrics")]
-[assembly: AssemblyCopyright("Copyright © CharlieJiang 2018")]
+[assembly: AssemblyProduct("QQLyrics")]
+[assembly: AssemblyCopyright("Copyright © mslxl 2022")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
